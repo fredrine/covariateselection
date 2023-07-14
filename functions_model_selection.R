@@ -10,11 +10,7 @@ gaussian_smoother1D = function(dat,sigma,window=NULL,periodic=FALSE,SQUARE=FALSE
   lendat = length(dat)
   kernel = array(0,dim=window)
   for (i in 1:window){
-    if (SQUARE){
-      kernel[i] = ((pnorm(0.5-(mid-i),sd=sigma))-(pnorm(-0.5-(mid-i),sd=sigma)))^2#dnorm(i-mid,sd=sigma)#
-    } else {
-      kernel[i] = dnorm(i-mid,sd=sigma)##pnorm(0.5-(mid-i),sd=sigma)-pnorm(-0.5-(mid-i),sd=sigma)#
-    }
+    kernel[i] = dnorm(i-mid,sd=sigma)
   }
   kernel = kernel/sum(kernel)
   newdat = array(0,lendat+2*(mid-1))
@@ -50,7 +46,7 @@ gaussian_smoother_invariant = function(dat,sigma,window=NULL,periodic=FALSE){
   lendat = length(dat)
   kernel = array(0,dim=window)
   for (i in 1:window){
-    kernel[i] = dnorm(i-mid,sd=sigma)##pnorm(0.5-(mid-i),sd=sigma)-pnorm(-0.5-(mid-i),sd=sigma)#
+    kernel[i] = dnorm(i-mid,sd=sigma)
   }
   kernel = kernel/sqrt(sum(kernel^2))
   newdat = array(0,lendat+2*(mid-1))
@@ -79,10 +75,8 @@ exponential_smoother1D = function(dat,invrate,power=1,window=NULL,periodic=FALSE
   # Exponential smoothing of a vector
   lendat = length(dat)
   kernel = array(0,dim=window)
-  #kernel[mid] = dexp(0,rate=1/invrate)
   kernel[mid] = 1/invrate
   for (i in (mid+1):window){
-    #kernel[i] = dexp(i-mid,rate=1/invrate)
     kernel[i] = exp(-((i-mid)/invrate)^power)/invrate
     kernel[window-i+1] = kernel[i]
   }
@@ -139,9 +133,6 @@ gaussian_smoother2D = function(dat,sigma,window=NULL,periodic=FALSE){
     }
   }
   
-  
-  #result = t(apply(dat,1,gaussian_smoother1D,sigma=sigma,window=window,periodic=periodic))
-  #result = apply(result,2,gaussian_smoother1D,sigma=sigma,window=window,periodic=periodic)
   return(result)
 }
 
