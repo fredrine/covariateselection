@@ -145,7 +145,7 @@ if (SAVE){
 }
 #### Forward selection on simulated data, 20 folds  ----
 
-# 
+# Simulates data with properties similar to the calcium data, and performs covarariate selection with various methods, using 20 folds in the cross-validation scheme.
 
 SAVE = FALSE
 
@@ -224,6 +224,9 @@ plot_results(FakeResultMat,bettermethodnames,alpha,hline=T,cex=2,nstep=3,covname
 #
 
 #### Forward selection on simulated data, 10 folds  ----
+
+# Simulates data with properties similar to the calcium data, and performs covarariate selection with various methods, using 10 folds in the cross-validation scheme.
+
 SAVE = FALSE
 
 set.seed(1)
@@ -301,6 +304,9 @@ plot_results(FakeResultMat,bettermethodnames,alpha,hline=T,cex=2,nstep=3,covname
 
 #
 #### Forward selection on calcium data, 20 folds ----
+
+# Performs covarariate selection with various methods on calcium data, using 20 folds in the cross-validation scheme.
+
 #hdknots = 6
 #posknots = 4
 #speknots = 5
@@ -371,6 +377,9 @@ plot_results(FakeResults,bettermethodnames,alpha,hline = T,cex=2,nstep=3)
 
 #
 #### Forward selection on calcium data, 10 folds ----
+
+# Performs covarariate selection with various methods on calcium data, using 10 folds in the cross-validation scheme.
+
 #hdknots = 6
 #posknots = 4
 #speknots = 5
@@ -439,6 +448,9 @@ plot_results(FakeResults,bettermethodnames,alpha,hline = T,cex=2,nstep=3)
 
 #
 #### Make tuning tables ----
+
+# Summarizes the results from the methods using cyclical shift, signed-rank test, and the modified method using signed-rank.
+
 grid_cells = readRDS(paste(processed_data_folder,"gridcells.RDS",sep=""))
 
 resmat = readRDS(paste(result_folder,"Calcium_data_matched_20_folds.RDS",sep=""))
@@ -536,6 +548,10 @@ saveRDS(spetunedSR,paste(result_folder,"spetunedSR.RDS",sep=""))
 
 #### Error rates and power estimates and confidence intervals ----
 
+# Calculate error rates of each method (for simulated data, how many times is a covariate included when it shouldn't in the case where there is no connection between the observed covariates and the response,
+# and for calcium data when the neural data and behavior is mismatched), with corresponding 95% confidence intervals (Clopper-Pearson).
+# Calculate power of each method (for simulated data, how many times is a position included when it should in the case where there is a connection between the position and the response,
+# and for calcium data the proportion of grid cells that are classified as being positionally tuned), with corresponding 95% confidence intervals (Clopper-Pearson).
 
 # Simulated data
 ntrials = 300
