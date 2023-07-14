@@ -23,10 +23,11 @@ library(rhdf5)
 library(GenBinomApps)
 library(ggvenn)
 
-figure_folder = "/Users/fredrine/Documents/Model selection paper/Redid figures for Elife (JUNE)/"
-result_folder = "/Users/fredrine/Documents/CalciumData/Result_data/"
-functions_folder = "/Users/fredrine/Documents/CalciumData/Scripts/"
-processed_data_folder = "/Users/fredrine/Documents/CalciumData/Processed_data/"
+figure_folder = "/Users/fredrine/Documents/CalciumData/Figures/" # Folder in which the figures are saved
+functions_folder = "/Users/fredrine/Documents/CalciumData/Scripts/" # Folder in which the functions_model_selection.R script lies
+processed_data_folder = "/Users/fredrine/Documents/CalciumData/Processed_data/" # Folder in which the results from the initial processing lie (binarized cell activity, covariate matrix with splined versions of the covariates)
+result_folder = "/Users/fredrine/Documents/CalciumData/Result_data/" # Folder in which the results from running the forward selection methods lie
+
 #### Load functions ----
 source(paste(functions_folder,"functions_model_selection.R",sep=""))
 #### Figure plotting functions ----
