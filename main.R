@@ -19,28 +19,27 @@ library(ggplot2)
 library(gridExtra)
 library(sparseMVN)
 library(rgl)
-library(fields)
 library(tidyverse)
 library(RColorBrewer)
 library(dendextend)
 library(rmatio)
 library(R.matlab)
-library(umap)
-library(glmnet)
 library(EnvStats)
 library(rhdf5)
 library(GenBinomApps)
 library(ggvenn)
 
-#result_folder = "/Users/fredrine/Documents/CalciumData/Result_data/"
-result_folder = "/Users/fredrine/Desktop/testing/"
-functions_folder = "/Users/fredrine/Documents/CalciumData/Scripts/"
-#processed_data_folder = "/Users/fredrine/Documents/CalciumData/Processed_data/"
-processed_data_folder = "/Users/fredrine/Desktop/testing/"
-data_folder = "/Users/fredrine/Documents/CalciumData/Prepped data/"
+data_folder = "/Users/fredrine/Documents/CalciumData/Prepped data/" # Folder in which the NAT.mat and NeuronInformation.mat files for the session of data from Zong et. al. (2022) lies
+functions_folder = "/Users/fredrine/Documents/CalciumData/Scripts/" # Folder in which the functions_model_selection.R script lies
+processed_data_folder = "/Users/fredrine/Documents/CalciumData/Processed_data/" # Folder in which the results from the initial processing will end up (binarized cell activity, covariate matrix with splined versions of the covariates)
+result_folder = "/Users/fredrine/Documents/CalciumData/Result_data/" # Folder in which the results from running the forward selection methods will end up
+
 #### Load functions ----
 source(paste(functions_folder,"functions_model_selection.R",sep=""))
 #### Load data for rat 97045, date 20210317----
+
+# Loads data from the NAT.mat and NeuronInformation.mat files, binarizes the neural activity, and increases the bin size of the tracking data to match the neural data.
+
 SAVE = FALSE
 
 animal =  97045
@@ -101,6 +100,9 @@ if (SAVE){
   saveRDS(trackdata2,paste(processed_data_folder,"trackdata2.RDS",sep=""))
 }
 #### Constructing the design matrix used in the GLM ----
+
+# Creates splined version of the covariates, and filters out some of the neurons that fire very sparsely.
+
 SAVE = FALSE
 
 hdknots = 6
@@ -142,6 +144,9 @@ if (SAVE){
   saveRDS(cellstokeep,paste(processed_data_folder,"cellstokeep.RDS",sep=""))
 }
 #### Forward selection on simulated data, 20 folds  ----
+
+# 
+
 SAVE = FALSE
 
 set.seed(1)
