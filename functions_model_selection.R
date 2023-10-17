@@ -1,5 +1,5 @@
 #### Data processing functions ----
-gaussian_smoother1D = function(dat,sigma,window=NULL,periodic=FALSE,SQUARE=FALSE,na.rm=F){
+gaussian_smoother1D = function(dat,sigma,window=NULL,periodic=FALSE,na.rm=F){
   if (is.null(window)){
     window = 8*sigma + 1
     mid = 4*sigma+1
@@ -388,6 +388,7 @@ add_boundaries_to_continuous_signal = function(signal,upper_boundary,lower_bound
 #### Ratemap functions ----
 
 ratemapXY = function(act1,act2=NULL,act3=NULL,act4=NULL,X,Y,binning=80,binsize,smoothingsd=15,minocc=0.01,xrange1=NULL,yrange1=NULL,CORNERVAL=NULL){
+  # Construct ratemaps for up to 4 cells, giving their activity (vector), and the positional variables X and Y for which to construct the ratemap over
   if (is.null(xrange1)){
     xrange1 = range(X)
   }
@@ -635,12 +636,6 @@ CV_folds = function(Y,X,folds,NORMAL=F,ONLY_INTERCEPT=F,family=family,nfolds=10,
         indsafter[which(indsafter > n)] = indsafter[which(indsafter > n)] - n
         indsbefore[which(indsbefore < 1)] = indsbefore[which(indsbefore < 1)] + n
         
-        #if (k == 1){
-        #  indsbefore = c(indsbefore,(n-SKIP_NEIGHBOR+1):n)
-        #}
-        #if (k == nfolds){
-        #  indsafter = c(indsafter,1:SKIP_NEIGHBOR)
-        #}
         
         indelse = setdiff(1:n,c(indk,indsafter,indsbefore))
         if (length(indelse) < length(indk)){
