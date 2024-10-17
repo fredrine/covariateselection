@@ -7,6 +7,7 @@ library(lmtest)
 library(MASS)
 library(mvtnorm)
 library(ggbiplot)
+library(fields)
 library(Matrix)
 library(ggplot2)
 library(gridExtra)
@@ -18,16 +19,19 @@ library(RColorBrewer)
 library(dendextend)
 library(rmatio)
 library(R.matlab)
+library(umap)
+library(glmnet)
 library(EnvStats)
 library(rhdf5)
 library(GenBinomApps)
 library(ggvenn)
 
-figure_folder = "/Users/fredrine/Documents/CalciumData/Figures/" # Folder in which the figures are saved
-functions_folder = "/Users/fredrine/Documents/CalciumData/Scripts/" # Folder in which the functions_model_selection.R script lies
-processed_data_folder = "/Users/fredrine/Documents/CalciumData/Processed_data/" # Folder in which the results from the initial processing lie (binarized cell activity, covariate matrix with splined versions of the covariates)
-result_folder = "/Users/fredrine/Documents/CalciumData/Result_data/" # Folder in which the results from running the forward selection methods lie
-
+#figure_folder = "/Users/fredrine/Documents/Model selection paper/Redid figures for Elife (JUNE)/"
+figure_folder = "/Users/fredrine/Documents/Model selection paper/Figures_revision/"
+#result_folder = "/Users/fredrine/Documents/CalciumData/Result_data/"
+result_folder = "/Users/fredrine/Documents/CalciumData/Result_data_revision/"
+functions_folder = "/Users/fredrine/Documents/CalciumData/Scripts/"
+processed_data_folder = "/Users/fredrine/Documents/CalciumData/Processed_data/"
 #### Load functions ----
 source(paste(functions_folder,"functions_model_selection.R",sep=""))
 #### Figure plotting functions ----
@@ -160,14 +164,14 @@ Nonsense_dev = function(cex=2.5){
 }
 
 # Figure 1D
-Nonsense_dev_pval = function(cex=2.5){
+Nonsense_dev_pval = function(cex=2.5,shiftx=0){
   parlwd = par("lwd")
   par(lwd=cex)
   LRpvals = readRDS(paste(figure_folder,"LRpvals.RDS",sep=""))
   opaq = 1
   #breaks = seq(0,1,by=0.0125)
   breaks = seq(0,1,by=0.02)
-  yl = c(0,3)
+  yl = c(0,20)#3)
   h=hist(LRpvals[4,],xlab="",ylim=yl,main="", col=rgb(230/255,159/255,0/255,opaq),lty=1,lwd=cex,breaks=breaks,freq=F,cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex,xaxt="n")
   title(xlab="p-value (from likelihood-ratio test)",cex=cex,cex.lab=cex,line=3.5)
   axis(side=1, at=seq(0,1,by=0.2),tick=T, labels=rep("",6),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
@@ -182,7 +186,8 @@ Nonsense_dev_pval = function(cex=2.5){
   lines(c(0,1),c(1,1),col="red",lty=1,lwd=cex*2)
   par(xpd=T)
   #legend(1.05/2*1,1.193975*yl[2],legend=c("Theoretical distribution","I.I.D.","Autocorrelated w. AR","Autocorrelated w.o. AR"),
-  legend(0.07,3.3,legend=c("Expected distribution (GLM assumptions)","IID data, no missing variable","IID data, missing variable","Autocorrelated data, no missing variable","Autocorrelated data, missing variable"),
+  yval = yl[2] + 0.3
+  legend(0.07+shiftx,yval,legend=c("Expected distribution (GLM assumptions)","IID data, no missing variable","IID data, missing variable","Autocorrelated data, no missing variable","Autocorrelated data, missing variable"),
          col = c("red", NA, NA,NA,NA),
          lty = c(1,NA,NA,NA,NA),
          lwd = c(2*cex,cex,cex,cex,cex),
@@ -449,7 +454,6 @@ Multiple_comparisons = function(cex=2.5){
 
 # Figure 2
 Hypothetical_p_distributions = function(cex=3){
-  pvals_single = readRDS(paste(figure_folder,"pvals_single.RDS",sep=""))
   pvals_max = readRDS(paste(figure_folder,"pvals_max.RDS",sep=""))
   pvals_max_corr = readRDS(paste(figure_folder,"pvals_max_corr.RDS",sep=""))
   
@@ -463,7 +467,7 @@ Hypothetical_p_distributions = function(cex=3){
   axis(1,at=seq(0,1,by=0.2),tick=T,labels=rep("",6),pos=-0.05,cex.axis=cex)
   axis(1,at=seq(0,1,by=0.2),labels=c("0.0","0.2","0.4","0.6","0.8","1.0"),tick=F,pos=-0.1,cex.axis=cex,col="white")
   
-  hist(pvals_max_corr,breaks=breaks,ylim=yl,xlab="p-value",main="Valid test",cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex,freq=F,xaxt='n')
+  hist(pvals_max_corr,breaks=breaks,ylim=yl,xlab="p-value",main="Exact test",cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex,freq=F,xaxt='n')
   lines(c(0,1),c(1,1),col="red",lty=1,lwd=cex*2)
   axis(1,at=seq(0,1,by=0.2),tick=T,labels=rep("",6),pos=-0.05,cex.axis=cex)
   axis(1,at=seq(0,1,by=0.2),labels=c("0.0","0.2","0.4","0.6","0.8","1.0"),tick=F,pos=-0.1,cex.axis=cex,col="white")
@@ -482,44 +486,46 @@ Simulated_false_results = function(cex=3,line=-0.1,logscale=T){
   alpha = 0.05
   
   newlabs = c()
-  newlabs[1] = expression(paste("CV"[""]))
-  newlabs[2] = expression(paste("mSR"["MaxT"]))
-  newlabs[3] = expression(paste("mSRR"["MaxT"]))
-  newlabs[4] = expression(paste("CS"["Bonf"]))
-  newlabs[5] = expression(paste("SR"[""]))
-  newlabs[6] = expression(paste("SR"["Bonf"]))
+  newlabs[1] = "CV" #expression(paste("CV"[""]))
+  newlabs[2] = "LRT" #expression(paste("mSR"["MaxT"]))
+  newlabs[3] = "SR" #expression(paste("mSRR"["MaxT"]))
+  newlabs[4] = "mSR" #expression(paste("CS"["Bonf"]))
+  newlabs[5] = "mSRR" #expression(paste("SR"[""]))
+  newlabs[6] = "CS" #expression(paste("SR"["Bonf"]))
   
-  methods1 = c("CV","mSR","mSRR","CS")
-  methods2 = c("CV","SR","SR_B")
+  methods1 = c("CV","mSR","mSRR","CS", "LRT")#c("CV","mSR","mSRR","CS")
+  methods2 = c("CV","SR")#,"SR_B")
   FakeMat_ = readRDS(paste(result_folder,"Simulated_data_no_effect_20_folds.RDS",sep=""))
   FakeMat2_ = readRDS(paste(result_folder,"Simulated_data_no_effect_10_folds.RDS",sep=""))
   
-  covnames = c("B (1D)","A (2D)","C (1D)")
+  #covnames = c("B (1D)","A (2D)","C (1D)")
+  covnames = c("HD","Pos","Spe")
   
   plot_combined_results_better_bars(FakeMat_,FakeMat2_,methods1,methods2,newlabs,alpha=alpha,cex=cex,covnames=covnames,hline=T,logscale=logscale,line=line)
 }
 
 # Figure 4
-Simulated_true_results = function(cex=3,line=-0.1,logscale=T){
+Simulated_true_results = function(cex=3,line=-0.1,logscale=T,ymax=NULL){
   alpha = 0.05
   
   newlabs = c()
-  newlabs[1] = expression(paste("CV"[""]))
-  newlabs[2] = expression(paste("mSR"["MaxT"]))
-  newlabs[3] = expression(paste("mSRR"["MaxT"]))
-  newlabs[4] = expression(paste("CS"["Bonf"]))
-  newlabs[5] = expression(paste("SR"[""]))
-  newlabs[6] = expression(paste("SR"["Bonf"]))
+  newlabs[1] = "CV" #expression(paste("CV"[""]))
+  newlabs[2] = "LRT" #expression(paste("mSR"["MaxT"]))
+  newlabs[3] = "SR" #expression(paste("mSRR"["MaxT"]))
+  newlabs[4] = "mSR" #expression(paste("CS"["Bonf"]))
+  newlabs[5] = "mSRR" #expression(paste("SR"[""]))
+  newlabs[6] = "CS" #expression(paste("SR"["Bonf"]))
   
-  methods1 = c("CV","mSR","mSRR","CS")
-  methods2 = c("CV","SR","SR_B")
+  methods1 = c("CV","mSR","mSRR","CS", "LRT")#c("CV","mSR","mSRR","CS")
+  methods2 = c("CV","SR")#,"SR_B")
 
   TrueMat_ = readRDS(paste(result_folder,"Simulated_data_true_effect_20_folds.RDS",sep=""))
   TrueMat2_ = readRDS(paste(result_folder,"Simulated_data_true_effect_10_folds.RDS",sep=""))
   
-  covnames = c("B (1D)","A (2D)","C (1D)")
+  #covnames = c("B (1D)","A (2D)","C (1D)")
+  covnames = c("HD","Pos","Spe")
   
-  plot_combined_results_better_bars(TrueMat_,TrueMat2_,methods1,methods2,newlabs,alpha=alpha,cex=cex,covnames=covnames,logscale = logscale,line=line)
+  plot_combined_results_better_bars(TrueMat_,TrueMat2_,methods1,methods2,newlabs,alpha=alpha,cex=cex,covnames=covnames,logscale = logscale,line=line,ymax=ymax)
 }
 
 # Figure 5
@@ -527,19 +533,19 @@ Calcium_false_results = function(cex=3,line=-0.1,logscale=T){
   alpha = 0.05
   
   newlabs = c()
-  newlabs[1] = expression(paste("CV"[""]))
-  newlabs[2] = expression(paste("mSR"["MaxT"]))
-  newlabs[3] = expression(paste("mSRR"["MaxT"]))
-  newlabs[4] = expression(paste("CS"["Bonf"]))
-  newlabs[5] = expression(paste("SR"[""]))
-  newlabs[6] = expression(paste("SR"["Bonf"]))
+  newlabs[1] = "CV" #expression(paste("CV"[""]))
+  newlabs[2] = "LRT" #expression(paste("mSR"["MaxT"]))
+  newlabs[3] = "SR" #expression(paste("mSRR"["MaxT"]))
+  newlabs[4] = "mSR" #expression(paste("CS"["Bonf"]))
+  newlabs[5] = "mSRR" #expression(paste("SR"[""]))
+  newlabs[6] = "CS" #expression(paste("SR"["Bonf"]))
   
-  methods1 = c("CV","mSR","mSRR","CS")
-  methods2 = c("CV","SR","SR_B")
+  methods1 = c("CV","mSR","mSRR","CS", "LRT")#c("CV","mSR","mSRR","CS")
+  methods2 = c("CV","SR")#,"SR_B")
   Fake_ = readRDS(paste(result_folder,"Calcium_data_mismatched_20_folds.RDS",sep=""))
   Fake2_ = readRDS(paste(result_folder,"Calcium_data_mismatched_10_folds.RDS",sep=""))
   
-  plot_combined_results_better_bars(Fake_,Fake2_,methods1,methods2,newlabs,alpha=alpha,cex=cex,covnames=c("HD","Pos","Spe"),hline = T,logscale = logscale,line=line)
+  mf=plot_combined_results_better_bars(Fake_,Fake2_,methods1,methods2,newlabs,alpha=alpha,cex=cex,covnames=c("HD","Pos","Spe"),hline = T,logscale = logscale,line=line)
   
 }
 
@@ -548,15 +554,15 @@ Calcium_true_results = function(cex=3,line=-0.1,logscale=F){
   alpha = 0.05
   
   newlabs = c()
-  newlabs[1] = expression(paste("CV"[""]))
-  newlabs[2] = expression(paste("mSR"["MaxT"]))
-  newlabs[3] = expression(paste("mSRR"["MaxT"]))
-  newlabs[4] = expression(paste("CS"["Bonf"]))
-  newlabs[5] = expression(paste("SR"[""]))
-  newlabs[6] = expression(paste("SR"["Bonf"]))
+  newlabs[1] = "CV" #expression(paste("CV"[""]))
+  newlabs[2] = "LRT" #expression(paste("mSR"["MaxT"]))
+  newlabs[3] = "SR" #expression(paste("mSRR"["MaxT"]))
+  newlabs[4] = "mSR" #expression(paste("CS"["Bonf"]))
+  newlabs[5] = "mSRR" #expression(paste("SR"[""]))
+  newlabs[6] = "CS" #expression(paste("SR"["Bonf"]))
   
-  methods1 = c("CV","mSR","mSRR","CS")
-  methods2 = c("CV","SR","SR_B")
+  methods1 = c("CV","mSR","mSRR","CS", "LRT")#c("CV","mSR","mSRR","CS")
+  methods2 = c("CV","SR")#,"SR_B")
   True_ = readRDS(paste(result_folder,"Calcium_data_matched_20_folds.RDS",sep=""))
   True2_ = readRDS(paste(result_folder,"Calcium_data_matched_10_folds.RDS",sep=""))
 
@@ -574,27 +580,143 @@ Ratemaps = function(cex=3){
   
   Xvec=trackdata2$headX[1:12000]
   Yvec=trackdata2$headY[1:12000]
-  Xvec2=trackdata2$HD[1:12000]
-  Yvec2=trackdata2$bodyspeed[1:12000]
+  #Xvec2=trackdata2$HD[1:12000]
+  #Yvec2=trackdata2$bodyspeed[1:12000]
   
   meanrates = apply(Y1,2,mean)/(1/7.25)
   colorbar = hcl.colors(100,palette="SunsetDark")
+  DONTNORMALIZE=T
+  RETURNPLOT=T
   
-  plot_rms_from_list_normalised(X=Xvec,Y=Yvec,Y1,gridandposCS[1:9],main=paste("Grid cells classified as position (average rate of events: ",round(mean(meanrates[gridandposCS])*1000)/1000,")",sep=""),min_occ=0.1,binning=40,smoothing_sd=rep(1,4),noaxis=T,cex=cex,mpar=NULL,cbar=colorbar)
-  plot_rms_from_list_normalised(X=Xvec,Y=Yvec,Y1,posnotgridCS[1:9],main=paste("Non-grid cells classified as position (average rate of events: ",round(mean(meanrates[posnotgridCS])*1000)/1000,")",sep=""),min_occ=0.1,binning=40,smoothing_sd=rep(1,4),noaxis=T,cex=cex,mpar=NULL,cbar=colorbar)
-  plot_rms_from_list_normalised(X=Xvec,Y=Yvec,Y1,gridnotposCS[1:9],main=paste("Grid cells not classified as position (average rate of events: ",round(mean(meanrates[gridnotposCS])*1000)/1000,")",sep=""),min_occ=0.1,binning=40,smoothing_sd=rep(1,4),noaxis=T,cex=cex,mpar=NULL,cbar=colorbar)
+  neither = setdiff(1:249, union(gridandposCS, union(posnotgridCS, gridnotposCS)))
+  
+  im_a = plot_rms_from_list_normalised(X=Xvec,Y=Yvec,Y1,gridandposCS[1:9],main=paste("Grid cells classified as position (average rate of events: ",round(mean(meanrates[gridandposCS])*1000)/1000,")",sep=""),min_occ=0.1,binning=40,smoothing_sd=rep(1,4),noaxis=T,cex=cex,mpar=NULL,cbar=colorbar,RETURNPLOT=RETURNPLOT,DONTNORMALIZE=DONTNORMALIZE)
+  im_b = plot_rms_from_list_normalised(X=Xvec,Y=Yvec,Y1,posnotgridCS[1:9],main=paste("Non-grid cells classified as position (average rate of events: ",round(mean(meanrates[posnotgridCS])*1000)/1000,")",sep=""),min_occ=0.1,binning=40,smoothing_sd=rep(1,4),noaxis=T,cex=cex,mpar=NULL,cbar=colorbar,RETURNPLOT=RETURNPLOT,DONTNORMALIZE=DONTNORMALIZE)
+  im_c = plot_rms_from_list_normalised(X=Xvec,Y=Yvec,Y1,gridnotposCS[1:9],main=paste("Grid cells not classified as position (average rate of events: ",round(mean(meanrates[gridnotposCS])*1000)/1000,")",sep=""),min_occ=0.1,binning=40,smoothing_sd=rep(1,4),noaxis=T,cex=cex,mpar=NULL,cbar=colorbar,RETURNPLOT=RETURNPLOT,DONTNORMALIZE=DONTNORMALIZE)
+  im_d = plot_rms_from_list_normalised(X=Xvec,Y=Yvec,Y1,neither[1:9],main=paste("Non-grid cells not classified as position (average rate of events: ",round(mean(meanrates[neither])*1000)/1000,")",sep=""),min_occ=0.1,binning=40,smoothing_sd=rep(1,4),noaxis=T,cex=cex,mpar=NULL,cbar=colorbar,RETURNPLOT=RETURNPLOT,DONTNORMALIZE=DONTNORMALIZE)
+  
+  zmax = max(c(max(im_a,na.rm=T),max(im_b,na.rm=T),max(im_c,na.rm=T),max(im_d,na.rm=T)))
+  
+  par(mfrow=c(2,2),pty="s")
+  main1 = paste("Grid cells classified as position\n(average rate of events: ",round(mean(meanrates[gridandposCS])*1000)/1000,")",sep="")
+  main2 = paste("Non-grid cells classified as position\n(average rate of events: ",round(mean(meanrates[posnotgridCS])*1000)/1000,")",sep="")
+  main3=paste("Grid cells not classified as position\n(average rate of events: ",round(mean(meanrates[gridnotposCS])*1000)/1000,")",sep="")
+  main4=paste("Non-grid cells not classified as position\n(average rate of events: ",round(mean(meanrates[neither])*1000)/1000,")",sep="")
+  
+  image(im_a,zlim=range(top,na.rm=T),main=main1,col=colorbar,axes=F,cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex)
+  image(im_b,zlim=range(top,na.rm=T),main=main2,col=colorbar,axes=F,cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex)
+  image(im_c,zlim=range(top,na.rm=T),main=main3,col=colorbar,axes=F,cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex)
+  image(im_d,zlim=range(top,na.rm=T),main=main4,col=colorbar,axes=F,cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex)
+  par(pty="m")
 }
 
 # Figure 7B
 Colorbar = function(cex=3){
-  par(mfrow=c(3,1))
-  plot.new()
+  par(mfrow=c(1,1))
+  #plot.new()
+  colorbar = hcl.colors(100,palette="SunsetDark")
   plot(rep(0.45,100),1:100,col=colorbar,pch=15,cex=cex*10,xlab="",ylab="",bty="n",xaxt="n",yaxt="n",xlim=c(0.45,1.1),ylim=c(1,100))
-  text(0.62,y=97,pos=4,labels="95th",cex=cex)
-  text(0.62,y=85,pos=4,labels="percentile",cex=cex)
-  text(0.62,y=2,pos=4,labels="0 events/sec",cex=cex)
-  plot.new()
+  #text(0.62,y=97,pos=4,labels="95th",cex=cex)
+  text(0.7,y=102.1,pos=4,labels="2.7Hz",cex=cex*1.2)
+  #text(0.62,y=85,pos=4,labels="percentile",cex=cex)
+  #text(0.62,y=2,pos=4,labels="0 events/sec",cex=cex)
+  text(0.7,y=-1.4,pos=4,labels="0.0Hz",cex=cex*1.2)
+  #plot.new()
 }
+
+# Figure SOMETHING NBNB
+Grid_nongrid_effect_size = function(cex=3){
+  parlwd=par("lwd")
+  par(lwd=cex*1.5)
+  effect_sizes = readRDS(paste(result_folder, "effect_sizes.RDS", sep=""))
+  
+  breaks=seq(0,0.4,by=0.01)
+  par(mfrow=c(1,1))
+  h1 = hist(effect_sizes$grid_CS$pos,breaks=breaks, plot=F)
+  h2 = hist(effect_sizes$nongrid_CS$pos,breaks=breaks, plot=F)
+  h3 = hist(effect_sizes$grid_CS$nopos,breaks=breaks, plot=F)
+  h4 = hist(effect_sizes$nongrid_CS$nopos,breaks=breaks, plot=F)
+  h3$counts = -h3$counts
+  h4$counts = - h4$counts
+  
+  opaq = 0.7
+  c1 = rgb(0/255,158/255,115/255,opaq)
+  c2 = rgb(86/255,180/255,233/255,opaq)
+  c3 = rgb(213/255,94/255,0/255,opaq)
+  c4 = rgb(240/255,228/255,66/255,opaq)
+  
+  plot(h1, ylim=c(-8,16), col=c1,yaxt="n", main="", xlab="",lty=1,lwd=cex,cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex,xaxt="n")
+  title(xlab="McFadden'a likelihood-ratio index",cex=cex,cex.lab=cex,line=3.5)
+  title(main="Effect of position",cex=cex,cex.lab=cex, cex.main=cex)
+  axis(side=1, at=seq(0,0.4,by=0.1),tick=T, labels=rep("", 5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=1, at=seq(0,0.4,by=0.1),tick=F, labels=c("0.0", "0.1", "0.2", "0.3", "0.4"),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex,line=0.3)
+  axis(2, at=seq(-8,16, by=4), labels=c(8,4, seq(0, 16, by=4)),tick=T,cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  plot(h2, col=c2, add=T)
+  plot(h3, col=c3, add=T)
+  plot(h4, col=c4, add=T)
+  leg = c("Grid cell classified as pos.", "Non-grid cell classified as pos.", "Grid cell, not classified as pos.", "Non-grid cell, not classified as pos.")
+  legend(0.20, 17,
+         legend=leg,
+         fill = c(c1,c2,c3,c4),
+         cex = cex,
+         bty=c("n","n","n","n"),
+  )
+  par(lwd=parlwd)
+}
+
+# Figure NEW SOMETHING EFFECT SIZES
+# Sim fake
+Sim_fake_effect_sizes = function(cex=3){
+  parlwd = par("lwd")
+  parcex = par("cex")
+  par(cex=cex, lwd=cex)
+  
+  effect_sizes_sim = readRDS(paste(result_folder, "effect_sizes_sim.RDS", sep=""))
+  plot_effect_sizes(effect_sizes_sim,T,lrt_lims=c(0.01, 0.01, 0.01), cex=cex)
+  
+  
+  par(cex=parcex, lwd=parlwd)
+}
+
+# Sim true
+Sim_true_effect_sizes = function(cex=3){
+  parlwd = par("lwd")
+  parcex = par("cex")
+  par(cex=cex, lwd=cex)
+  
+  effect_sizes_sim = readRDS(paste(result_folder, "effect_sizes_sim.RDS", sep=""))
+  plot_effect_sizes(effect_sizes_sim, lrt_lims=c(0.03, 0.03, 0.03),SIM=T, cex=cex)
+  
+  
+  par(cex=parcex, lwd=parlwd)
+}
+
+# Calcium fake
+Calcium_fake_effect_sizes = function(cex=3){
+  parlwd = par("lwd")
+  parcex = par("cex")
+  par(cex=cex, lwd=cex)
+  
+  effect_sizes = readRDS(paste(result_folder, "effect_sizes.RDS", sep=""))
+  plot_effect_sizes(effect_sizes,T, lrt_lims=c(0.05, 0.15, 0.05), cex=cex)
+  
+  
+  par(cex=parcex, lwd=parlwd)
+}
+
+# Calcium true
+Calcium_true_effect_sizes = function(cex=3){
+  parlwd = par("lwd")
+  parcex = par("cex")
+  par(cex=cex, lwd=cex)
+  
+  effect_sizes = readRDS(paste(result_folder, "effect_sizes.RDS", sep=""))
+  plot_effect_sizes(effect_sizes, lrt_lims=c(0.2, 0.4, 0.1), cex=cex)
+  
+  
+  par(cex=parcex, lwd=parlwd)
+}
+
 
 # Figure 8
 Venn_diagrams = function(cex=3){
@@ -625,11 +747,11 @@ Venn_diagrams = function(cex=3){
   size = cex*2
   
   vennCS = ggvenn(xCS, stroke_size = cex/2,text_size=size*1.25,set_name_size=size*1.35,digits=0,fill_alpha = 0.7,
-                  fill_color = c(orangecol,yellowcol,bluecol, graycol))  + ggtitle(expression('CS'['Bonf'])) + theme(plot.title = element_text(hjust = 0.5,vjust=6,size=size*6))
+                  fill_color = c(orangecol,yellowcol,bluecol, graycol))  + ggtitle(expression('CS')) + theme(plot.title = element_text(hjust = 0.5,vjust=6,size=size*6))
   
   
   vennSR = ggvenn(xmSRR, stroke_size = cex/2,text_size=size*1.25,set_name_size=size*1.35,digits=0,fill_alpha = 0.7,
-                  fill_color = c(orangecol,yellowcol,bluecol, graycol)) + ggtitle(expression('mSRR'['MaxT'])) + theme(plot.title = element_text(hjust = 0.5,vjust=6,size=size*6))
+                  fill_color = c(orangecol,yellowcol,bluecol, graycol)) + ggtitle(expression('mSRR')) + theme(plot.title = element_text(hjust = 0.5,vjust=6,size=size*6))
   
   
   vennWT = ggvenn(xSR, stroke_size = cex/2,text_size=size*1.25,set_name_size=size*1.35,digits=0,fill_alpha = 0.7,
@@ -734,10 +856,10 @@ Cyclical_illustration = function(cex=3){
       rect(xlefts[i],ybottoms[j],xrights[i],ytops[j],density=100,col=cols[[j]][i])
     }
   }
-  text(0,67,"Original data",pos=4,cex=cex)
-  text(0,7,"Cyclically shifted data",pos=4,cex=cex)
+  text(0,67,"Original data",pos=4,cex=cex*0.95)
+  text(0,7,"Cyclically shifted data",pos=4,cex=cex*0.95)
   
-  lwd = 4
+  lwd = cex*4/3#4
   lines(c(71,71),c(43,41),col="black",lwd=lwd)
   lines(c(100,100),c(43,41),col="black",lwd=lwd)
   lines(c(71,100),c(41,41),col="black",lwd=lwd)
@@ -753,7 +875,7 @@ Cyclical_illustration = function(cex=3){
 # Figure 11
 Multiple_corrections = function(cex=3){
   pvals_single = readRDS(paste(figure_folder,"pvals_single.RDS",sep=""))
-  pvals_max = readRDS(paste(figure_folder,"pvals_max.RDS",sep=""))
+  pvals_max = readRDS(paste(figure_folder_,"pvals_max.RDS",sep=""))
   pvals_max_corr = readRDS(paste(figure_folder,"pvals_max_corr.RDS",sep=""))
   
   parlwd=par("lwd")
@@ -875,7 +997,7 @@ Data_similarities = function(cex=3){
 }
 
 # Figure 13
-Simulation_illustration = function(cex=3){
+OLDSimulation_illustration = function(cex=3){
   set.seed(1)
   parlwd=par("lwd")
   par(lwd=cex)
@@ -951,6 +1073,102 @@ Simulation_illustration = function(cex=3){
   axis(side=2, at=seq(0,1,by=1/6),tick=T, labels=rep("",7),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
   axis(side=2, at=seq(0,1,by=1/6),tick=F, labels=c("-0.3","-0.2","-0.1","0.0","0.1","0.2","0.3"),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
   
+  par(lwd=parlwd)
+}
+
+Simulation_illustration = function(cex=3,seed=20){
+  set.seed(seed)
+  parlwd=par("lwd")
+  par(lwd=cex)
+  track_obs = readRDS(paste(processed_data_folder,"trackdata2.RDS",sep=""))
+  track_hid = readRDS(paste(processed_data_folder,"trackdata2_other_date.RDS",sep=""))
+  
+  N = 12000
+  hd_hid = track_hid$HD[1:N]
+  x_hid = track_hid$headX[1:N]
+  y_hid = track_hid$headY[1:N]
+  s_hid = normalize_speed(track_hid$bodyspeed[1:N])
+  
+  hd_obs = track_obs$HD[1:N]
+  x_obs = track_obs$headX[1:N]
+  y_obs = track_obs$headY[1:N]
+  #s_obs = normalize_speed(track_obs$bodyspeed[1:N])
+  
+  intercept = 4.6
+  
+  norm_pos = 1.5
+  norm_hd = 1
+  norm_spe = 1.5
+  
+  decay_pos = 0.003
+  decay_hd = 3
+  decay_spe = 1
+  
+  # Draw random centers for the tuning peaks
+  center_hd = 1
+  center_x = 15
+  center_y = 17
+  center_s = 0.7
+  
+  
+  hidden_hd_contribution = contribution(norm_hd, decay_hd, hd_hid, center_hd, periodic=T)
+  pos_contribution = contribution(norm_pos, decay_pos, x_obs, center_x, y_obs, center_y)
+  hidden_spe_contribution = contribution(norm_spe, decay_spe, s_hid, center_s)
+  p_pos = 1 / (1 + exp(intercept - hidden_hd_contribution - pos_contribution - hidden_spe_contribution))
+  
+  hd_contribution = contribution(norm_hd, decay_hd, hd_obs, center_hd)
+  hidden_pos_contribution = contribution(norm_pos, decay_pos, x_hid, center_x, y_hid, center_y)
+  hidden_spe_contribution = contribution(norm_spe, decay_spe, s_hid, center_s)
+  p_hd = 1 / (1 + exp(intercept - hd_contribution - hidden_pos_contribution - hidden_spe_contribution))
+  
+  colorbar = hcl.colors(100,palette="SunsetDark")
+  
+  smoothingsd = c(0,1,0,0)
+  y_pos = rbinom(N,1,p_pos)
+  y_hd = rbinom(N,1,p_hd)
+  
+  rm = ratemapXY(pos_contribution,y_pos,X=x_obs,Y=y_obs,binning=40,smoothingsd=smoothingsd,binsize=1)
+  tc = tuningcurve(hd_contribution,y_hd,X=hd_obs,binning=30,smoothingsd=smoothingsd,binsize=1)
+  
+  image.plot(rm$rm1,main="Contribution of position",col=colorbar,cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex,axis.args=list(cex.axis=cex),xaxt='n',yaxt='n')
+  title(xlab="X",cex=cex,cex.lab=cex,line=3.8)
+  title(ylab="Y",cex=cex,cex.lab=cex,line=3.2)
+  axis(side=1, at=seq(0,1,length.out=5),tick=T, labels=rep("",5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=1, at=seq(0,1,length.out=5),tick=F, labels=seq(-40,40,length.out=5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex,pos=-0.025)#,pos=-0.3-0.2*0.6/3)
+  axis(side=2, at=seq(0,1,length.out=5),tick=T, labels=rep("",5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=2, at=seq(0,1,length.out=5),tick=F, labels=seq(-40,40,length.out=5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  
+  quant = quantile(rm$rm2,0.95,na.rm=T)
+  rm$rm2[which(rm$rm2 > quant)] = quant
+  image.plot(rm$rm2 * 7.25,main="Ratemap example",col=colorbar,cex.lab=cex, cex.axis=cex, cex.main=cex, cex.sub=cex,axis.args=list(cex.axis=cex),xaxt='n',yaxt='n')
+  title(xlab="X",cex=cex,cex.lab=cex,line=3.8)
+  title(ylab="Y",cex=cex,cex.lab=cex,line=3.2)
+  axis(side=1, at=seq(0,1,length.out=5),tick=T, labels=rep("",5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=1, at=seq(0,1,length.out=5),tick=F, labels=seq(-40,40,length.out=5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex,pos=-0.025)#,pos=-0.3-0.2*0.6/3)
+  axis(side=2, at=seq(0,1,length.out=5),tick=T, labels=rep("",5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=2, at=seq(0,1,length.out=5),tick=F, labels=seq(-40,40,length.out=5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  
+  parmar = par("mar")
+  par(mar=rep(parmar[1],4))
+  maxy = max(tc$tc1) * 1.05
+  breaks = seq(-pi, pi, length.out=31)[1:30]
+  mids = breaks + 0.5 * (breaks[2] - breaks[1])
+  plot(mids,tc$tc1,main="Contribution of head direction",type="l",ylab="",xlab="",ylim=c(0,maxy),cex.main=cex,cex.lab=cex,cex.axis=cex,xaxt="n",yaxt="n")
+  title(xlab="Head direction",cex=cex,cex.lab=cex,line=3.7)
+  axis(side=1, at=seq(-3,3,length.out=7),tick=T, labels=rep("",7),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=1, at=seq(-3,3,length.out=7),tick=F, labels=c("-3","-2","-1","0","1","2","3"),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex,pos=-0.06)
+  axis(side=2, at=seq(0,1.2,by=0.2),tick=T, labels=rep("",7),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=2, at=seq(0,1.2,by=0.2),tick=F, labels=c("0.0","0.2","0.4","0.6","0.8","1.0", "1.2"),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  
+  maxy = max(tc$tc2) * 1.05 * 7.25
+  plot(mids,tc$tc2 * 7.25,main="Tuning curve example",type="l",ylab="",xlab="",ylim=c(0,maxy+0.2),cex.main=cex,cex.lab=cex,cex.axis=cex,xaxt="n",yaxt="n")
+  title(xlab="Head direction",cex=cex,cex.lab=cex,line=3.7)
+  axis(side=1, at=seq(-3,3,length.out=7),tick=T, labels=rep("",7),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=1, at=seq(-3,3,length.out=7),tick=F, labels=c("-3","-2","-1","0","1","2","3"),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex,pos=-0.06)
+  axis(side=2, at=seq(0,0.8,by=0.2),tick=T, labels=rep("",5),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  axis(side=2, at=seq(0,0.8,by=0.2),tick=F, labels=c("0.0","0.2","0.4","0.6","0.8"),cex.lab=cex,cex=cex, cex.axis=cex,lwd=cex)
+  
+  par(mar=parmar)
   par(lwd=parlwd)
 }
 
@@ -1336,192 +1554,231 @@ mar = c(5,5,5,5)
 #mar = c(4.5,5,1,0.5)
 
 
-jpeg(paste(figure_folder,"jpegs/blank.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/blank.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight, res=300)
 par(mfrow=c(1,1),mar=mar)
 plot.new()
 dev.off()
 #Singles
 
-# Fig 1A
-jpeg(paste(figure_folder,"jpegs/Nonsense_corr.jpeq",sep=""),
+# Fig 1A ----
+jpeg(paste(figure_folder,"jpegs/Nonsense_corr.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight, res=300)
 par(mfrow=c(1,1),mar=mar)
 Nonsense_corr()
 dev.off()
 
 # Fig 1B
-jpeg(paste(figure_folder,"jpegs/Nonsense_corr_pval.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Nonsense_corr_pval.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight, res=300)
 par(mfrow=c(1,1),mar=mar)
 Nonsense_corr_pval()
 dev.off()
 
 # Fig 1C
-jpeg(paste(figure_folder,"jpegs/Nonsense_dev.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Nonsense_dev.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight, res=300)
 par(mfrow=c(1,1),mar=mar)
 Nonsense_dev()
 dev.off()
 
 # Fig 1D
-jpeg(paste(figure_folder,"jpegs/Nonsense_dev_pval.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Nonsense_dev_pval.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight, res=300)
 par(mfrow=c(1,1),mar=mar)
 Nonsense_dev_pval()
 dev.off()
 
+
 # Fig 1E
-jpeg(paste(figure_folder,"jpegs/CV_error_rates.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/CV_error_rates.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight, res=300)
 par(mfrow=c(1,1),mar=mar)
 CV_error_rates()
 dev.off()
 
 # Fig 1F
-jpeg(paste(figure_folder,"jpegs/SR_error_rates.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/SR_error_rates.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight, res=300)
 par(mfrow=c(1,1),mar=mar)
 SR_error_rates()
 dev.off()
 
 # Fig 1G
-jpeg(paste(figure_folder,"jpegs/Multiple_comparisons.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Multiple_comparisons.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight, res=300)
 par(mfrow=c(1,1),mar=mar)
 Multiple_comparisons()
 dev.off()
 
-# Fig 2
-jpeg(paste(figure_folder,"jpegs/Hypothetical_p_distributions.jpeq",sep=""),
+# Fig 2 ----
+jpeg(paste(figure_folder,"jpegs/Hypothetical_p_distributions.jpeg",sep=""),
      units="in", width=basewidth*2, height=baseheight, res=300)
 par(mfrow=c(1,3),mar=mar)
 Hypothetical_p_distributions()
 dev.off()
 
 
+# RESULT THINGS ----
 # Figure 3, Simulated false results
-jpeg(paste(figure_folder,"jpegs/Simulated_false_results_logscale.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Simulated_false_results_logscale.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*0.9*2, res=300)
 par(mfrow=c(2,1),mar=mar)
 Simulated_false_results(logscale=T)
 dev.off()
-jpeg(paste(figure_folder,"jpegs/Simulated_false_results.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Simulated_false_results.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*0.9*2, res=300)
 par(mfrow=c(2,1),mar=mar)
 Simulated_false_results(logscale=F)
 dev.off()
 
 # Figure 4, Simulated true results
-jpeg(paste(figure_folder,"jpegs/Simulated_true_results_logscale.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Simulated_true_results_logscale.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*0.9, res=300)
 par(mfrow=c(1,1),mar=mar)
 Simulated_true_results(logscale=T)
 dev.off()
-jpeg(paste(figure_folder,"jpegs/Simulated_true_results.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Simulated_true_results.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*0.9, res=300)
 par(mfrow=c(1,1),mar=mar)
-Simulated_true_results(logscale=F)
+Simulated_true_results(logscale=F,ymax=116)
 dev.off()
 
 # Figure 5, Calcium false results
-jpeg(paste(figure_folder,"jpegs/Calcium_false_results_logscale.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Calcium_false_results_logscale.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*0.9*2, res=300)
 par(mfrow=c(2,1),mar=mar)
 Calcium_false_results(logscale=T)
 dev.off()
-jpeg(paste(figure_folder,"jpegs/Calcium_false_results.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Calcium_false_results.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*0.9*2, res=300)
 par(mfrow=c(2,1),mar=mar)
 Calcium_false_results(logscale=F)
 dev.off()
 
 # Figure 6, Calcium true results
-jpeg(paste(figure_folder,"jpegs/Calcium_true_results_logscale.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Calcium_true_results_logscale.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*0.9, res=300)
 par(mfrow=c(1,1),mar=mar)
 Calcium_true_results(logscale=T)
 dev.off()
-jpeg(paste(figure_folder,"jpegs/Calcium_true_results.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Calcium_true_results.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*0.9, res=300)
 par(mfrow=c(1,1),mar=mar)
 Calcium_true_results(logscale=F)
 dev.off()
 
-# Fig 7
-jpeg(paste(figure_folder,"jpegs/Ratemaps.jpeq",sep=""),
-     units="in", width=basewidth*3, height=baseheight*1.7, res=300)
-par(mfrow=c(1,3),mar=c(5, 5, 5, 5))
-Ratemaps()
+# Fig 7 ----
+jpeg(paste(figure_folder,"jpegs/Ratemaps.jpeg",sep=""),
+     #units="in", width=basewidth*2.5, height=basewidth*2.5, res=300)
+     units="in", width=basewidth, height=basewidth, res=300)
+par(mfrow=c(1,3),mar=c(3.5, 3, 6, 3))
+Ratemaps(2)
 dev.off()
 
-jpeg(paste(figure_folder,"jpegs/Colorbar.jpeq",sep=""),
-     units="in", width=basewidth/3, height=baseheight*1.8, res=300)
-par(mar=c(4, 3, 4, 3))
-Colorbar()
+jpeg(paste(figure_folder,"jpegs/Colorbar.jpeg",sep=""),
+     units="in", width=basewidth*0.4, height=basewidth*2.5, res=300)
+par(mar=c(4, 1, 4, 2))
+Colorbar(3.5)
 dev.off()
 
-# Fig 8
-jpeg(paste(figure_folder,"jpegs/Venn_diagrams.jpeq",sep=""),
-     units="in", width=basewidth*3, height=baseheight*2*0.9, res=300)
+# Fig NEW, EFFECT SIZE GRID/NONGRID ----
+jpeg(paste(figure_folder,"jpegs/EffectGridNongrid.jpeg",sep=""),
+     units="in", width=basewidth*1.5, height=baseheight*1.2, res=300)
 par(mar=mar)
-Venn_diagrams()
+Grid_nongrid_effect_size(2.5)
 dev.off()
 
-# Fig 9
-jpeg(paste(figure_folder,"jpegs/Blocking_illustration.jpeq",sep=""),
-     units="in", width=basewidth*2, height=baseheight, res=300)
+
+# Fig 8 ----
+jpeg(paste(figure_folder,"jpegs/Venn_diagrams.jpeg",sep=""),
+     #units="in", width=basewidth*3, height=baseheight*2*0.9, res=300)
+     units="in", width=basewidth*2, height=baseheight*2*0.6, res=300)
+par(mar=mar)
+Venn_diagrams(2)
+dev.off()
+
+# Fig 9 ----
+jpeg(paste(figure_folder,"jpegs/Blocking_illustration.jpeg",sep=""),
+     #units="in", width=basewidth*2, height=baseheight, res=300)
+     units="in", width=basewidth, height=baseheight/2, res=300)
 par(mfrow=c(1,1),mar=mar)
-Blocking_illustration()
+Blocking_illustration(1.5)
 dev.off()
 
-# Fig 10
-jpeg(paste(figure_folder,"jpegs/Cyclical_illustration.jpeq",sep=""),
-     units="in", width=basewidth*2, height=baseheight, res=300)
-par(mfrow=c(1,1),mar=mar)
-Cyclical_illustration()
+# Fig 10 ----
+jpeg(paste(figure_folder,"jpegs/Cyclical_illustration.jpeg",sep=""),
+     #units="in", width=basewidth*2, height=baseheight, res=300)
+     units="in", width=basewidth, height=baseheight/2, res=300)
+par(mfrow=c(1,1),mar=c(0.2,0.2,0.2,0.2))#mar)
+Cyclical_illustration(1.7)
 dev.off()
 
-# Fig 11
-jpeg(paste(figure_folder,"jpegs/Multiple_corrections.jpeq",sep=""),
+
+# Fig 11 ----
+jpeg(paste(figure_folder,"jpegs/Multiple_corrections.jpeg",sep=""),
      units="in", width=basewidth*2, height=baseheight, res=300)
 par(mfrow=c(1,3),mar=mar)
 Multiple_corrections()
 dev.off()
 
-# Fig 12
-jpeg(paste(figure_folder,"jpegs/Data_similarities.jpeq",sep=""),
+# Fig 12 ----
+jpeg(paste(figure_folder,"jpegs/Data_similarities.jpeg",sep=""),
      units="in", width=basewidth*2, height=baseheight*1.5, res=300)
 par(mfrow=c(2,3),mar=c(6,6,5,5))
 Data_similarities()
 dev.off()
 
-# Fig 13
-jpeg(paste(figure_folder,"jpegs/Simulation_illustration.jpeq",sep=""),
-     units="in", width=basewidth*3, height=baseheight*1.16, res=300)
+# Fig 13 ----
+jpeg(paste(figure_folder,"jpegs/Simulation_illustration_.jpeg",sep=""),
+     units="in", width=basewidth*3/3, height=baseheight*1.16/3, res=300)
 par(mfrow=c(1,4),mar=c(5,6,5,11))
 Simulation_illustration()
 dev.off()
 
-# Fig 14
-jpeg(paste(figure_folder,"jpegs/Calcium_illustration.jpeq",sep=""),
+# Fig 14 ----
+jpeg(paste(figure_folder,"jpegs/Calcium_illustration.jpeg",sep=""),
      units="in", width=basewidth*3, height=baseheight*1.22, res=300)
 par(mfrow=c(1,4),mar=c(5,6,5,6))
 Calcium_illustration()
 dev.off()
 
-# Two doubles
-jpeg(paste(figure_folder,"jpegs/Nonsense_corr_double2.jpeq",sep=""),
+# Two doubles ----
+jpeg(paste(figure_folder,"jpegs/Nonsense_corr_double2.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight*2, res=600)
 par(mfrow=c(2,1),mar=mar)
 Nonsense_corr()
 Nonsense_corr_pval()
 dev.off()
 
-jpeg(paste(figure_folder,"jpegs/Nonsense_dev_double.jpeq",sep=""),
+jpeg(paste(figure_folder,"jpegs/Nonsense_dev_double.jpeg",sep=""),
      units="in", width=basewidth, height=baseheight*2, res=300)
 par(mfrow=c(2,1),mar=mar)
 Nonsense_dev()
 Nonsense_dev_pval()
 dev.off()
 
+# Effect sizes ----
+jpeg(paste(figure_folder,"jpegs/Effect_size_sim_fake.jpeg",sep=""),
+     units="in", width=basewidth, height=baseheight*2, res=300)
+par(mar=mar)
+Sim_fake_effect_sizes(2)
+dev.off()
+
+jpeg(paste(figure_folder,"jpegs/Effect_size_sim_true.jpeg",sep=""),
+     units="in", width=basewidth, height=baseheight*2, res=300)
+par(mar=mar)
+Sim_true_effect_sizes(2)
+dev.off()
+
+jpeg(paste(figure_folder,"jpegs/Effect_size_calcium_fake.jpeg",sep=""),
+     units="in", width=basewidth, height=baseheight*2, res=300)
+par(mar=mar)
+Calcium_fake_effect_sizes(2)
+dev.off()
+
+jpeg(paste(figure_folder,"jpegs/Effect_size_calcium_true.jpeg",sep=""),
+     units="in", width=basewidth, height=baseheight*2, res=300)
+par(mar=mar)
+Calcium_true_effect_sizes(2)
+dev.off()
